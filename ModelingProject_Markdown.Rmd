@@ -1,0 +1,92 @@
+---
+title: "Predictive Maching Learning Project"
+author: "Dan Goodman"
+date: "Friday, June 20, 2014"
+---
+
+This is my attempt at the PML project.  I was only able to generate working models with the "Accelerometer" predictors.
+
+**Steps in Analysis**:
+
+- Load training and testing datasets
+- Filter out messy data-factors with only 2 levels
+- Select only predictors starting with "Accel"
+- Break training data into 2 partitions
+- Create a CART model using caret
+- Evaluate Performance against the testing partition
+- Run model against test data for submission
+
+Load Libraries
+```{r echo=FALSE}
+
+library(caret)
+library(rpart.plot)
+library(rattle)
+library(AppliedPredictiveModeling)
+library(ggplot2)
+setwd("~/R/Coursera")
+
+#Get data and clean up column types
+training <- read.csv("pml-training.csv")
+training$classe <- factor(training$classe)
+testing <- read.csv("pml-testing.csv")
+testing$var_accel_forearm <- as.numeric(testing$var_accel_forearm)
+testing$var_total_accel_belt <- as.numeric(testing$var_total_accel_belt)
+testing$var_accel_arm  <- as.numeric(testing$var_accel_arm)
+testing$var_accel_dumbbell <- as.numeric(testing$var_accel_dumbbell)
+ColFilter <- as.list(apply(training, 2, function(x)length(unique(x))))
+Keep <- names(which(ColFilter>2))
+training <- subset(training, select = Keep)
+ColFilterTest <- as.list(apply(training, 2, function(x)length(unique(x))))
+KeepTest <- Keep
+KeepTest[153]="problem_id"
+testing <- subset(testing, select = KeepTest)
+#Split Training Set
+inTrain = createDataPartition(training$classe, p = 0.7)[[1]]
+TrainSet = training[ inTrain,]
+TestSet = training[-inTrain,]
+
+#Data is Messy, Focus on Accelerometers only
+#Just Use Accelerometer Values
+Accel <- grep("^accel", names(TrainSet))
+AccelTrain <- TrainSet[,c(Accel,which(names(TrainSet)=="classe"))]
+AccelTest <- TestSet[,c(Accel,which(names(TestSet)=="classe"))]
+
+
+```
+Variables in my dataset:
+```{r}
+names(AccelTest)
+
+```
+
+Create a Simple Tree
+```{r}
+#Try a Tree Model
+ModelCart <- train(classe~., method="rpart", data=AccelTrain)
+print(ModelCart)
+
+
+```
+Visualize tree
+```{r plot}
+
+fancyRpartPlot(ModelCart$finalModel)
+```
+
+Of the 13 predictors in the set, 4 are shown as useful.
+
+-----
+Compare against Test Set
+```{r}
+
+#Predict on TestSet
+AccelPredict <- predict(ModelCart, newdata = AccelTest)
+print(confusionMatrix(AccelPredict,AccelTest$classe))
+
+```
+
+The model generates an out of sample error rate of about 60%
+It does reasonably well at Class A and Class E predictions, but needs some help on B, C, and D.
+
+I'm sure this could be improved by expanding the list of predictors.
